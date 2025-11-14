@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Interest Calculator</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:Poppins}
+body{background:linear-gradient(135deg,#1e1e2f,#111119);color:white;min-height:100vh;padding:20px;display:flex;justify-content:center;align-items:center}
+.wrapper{width:100%;max-width:480px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);padding:24px;border-radius:18px;box-shadow:0 10px 45px rgba(0,0,0,0.5)}
+h2{text-align:center;margin-bottom:18px;font-size:22px;font-weight:600}
+.input-group{margin-bottom:16px;display:flex;flex-direction:column}
+label{font-size:14px;margin-bottom:6px}
+input,select{padding:12px;border-radius:10px;border:none;background:rgba(255,255,255,0.07);color:white;font-size:15px}
+.btn{width:100%;padding:14px;margin-top:8px;border:none;border-radius:12px;font-weight:600;font-size:16px;cursor:pointer;background:#00d4ff;color:#000;box-shadow:0 4px 15px rgba(0,212,255,0.3)}
+.mode-row{display:flex;gap:10px;margin-bottom:12px}
+.mode-btn{flex:1;padding:12px;border-radius:10px;border:none;cursor:pointer;font-weight:600}
+.mode-btn.active{background:#00d4ff;color:#000}
+.result{margin-top:18px;padding:16px;border-radius:14px;background:rgba(255,255,255,0.08);display:none}
+.result p{margin-bottom:8px;font-size:15px}
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <h2>Interest Calculator</h2>
+
+  <div class="mode-row">
+    <button id="simpleBtn" class="mode-btn active">Simple Interest</button>
+    <button id="compoundBtn" class="mode-btn">Compound Interest</button>
+  </div>
+
+  <div class="input-group">
+    <label>Principal Amount (₹)</label>
+    <input id="principal" type="text" placeholder="100000" min="0">
+  </div>
+
+  <div class="input-group">
+    <label>Rate (% per month)</label>
+    <input id="rate" type="number" placeholder="2" min="0" step="0.01">
+  </div>
+
+  <div class="input-group">
+    <label>From Date</label>
+    <input id="fromDate" type="date">
+  </div>
+
+  <div class="input-group">
+    <label>To Date</label>
+    <input id="toDate" type="date">
+  </div>
+
+  <div class="input-group">
+    <label>Optional: Months</label>
+    <input id="monthsInput" type="number" min="0">
+  </div>
+
+  <div class="input-group" id="freqGroup" style="display:none">
+    <label>Compounding Frequency</label>
+    <select id="freq">
+      <option value="12">Monthly</option>
+      <option value="4">Quarterly</option>
+      <option value="2">Half‑Yearly</option>
+      <option value="1">Yearly</option>
+    </select>
+  </div>
+
+  <div class="input-group">
+    <label>Optional: Days</label>
+    <input id="daysInput" type="number" min="0">
+  </div>
+
+  <button class="btn" id="calcBtn">Calculate</button>
+  <button class="btn" id="clearBtn">Clear</button>
+
+  <div class="result" id="resultBox">
+    <p id="interestOut">Interest: ₹0.00</p>
+    <p id="totalOut">Total: ₹0.00</p>
+    <p id="periodOut">Period:</p>
+  </div>
+</div>
+
+<script>
+// banker 30/360 months calculation
+function bankerMonthsBetween(start,end){
+  const d1=start.getDate(), m1=start.getMonth()+1, y1=start.getFullYear();
+  const d2=end.getDate(), m2=end.getMonth()+1, y2=end.getFullYear();
+  const D1 = d1===31?30:d1;
+  const D2 = d2===31?30:d2;
+  const diff = (y2 - y1)*360 + (m2 - m1)*30 + (D2 - D1);
+  return diff / 30; // months (may be decimal)
+}
+
+// elements
+const simpleBtn = document.getElementById('simpleBtn');
+const compoundBtn = document.getElementById('compoundBtn');
+const freqGroup = document.getElementById('freqGroup');
+const calcBtn = document.getElementById('calcBtn');
+const clearBtn = document.getElementById('clearBtn');
+
+let interestType = 'simple';
+
+simpleBtn.addEventListener('click', ()=>{
+  interestType = 'simple';
+  simpleBtn.classList.add('active');
+  compoundBtn.classList.remove('active');
+  freqGroup.style.display = 'none';
+});
+compoundBtn.addEventListener('click', ()=>{
+  interestType = 'compound';
+  compoundBtn.classList.add('active');
+  simpleBtn.classList.remove('active');
+  freqGroup.style.display = 'block';
+});
+
+// comma formatting for principal
+const principalEl = document.getElementById('principal');
+principalEl.addEventListener('input', () => {
+  let val = principalEl.value.replace(/,/g, '');
+  if(!isNaN(val) && val !== ''){
+    principalEl.value = Number(val).toLocaleString('en-IN');
+  }
+});
+
+calcBtn.addEventListener('click', ()=>{
+  const P = parseFloat(document.getElementById('principal').value.replace(/,/g, ''));
+  const R = parseFloat(document.getElementById('rate').value);
+  let months = parseFloat(document.getElementById('monthsInput').value);
+  const days = parseFloat(document.getElementById('daysInput').value);
+  const fromVal = document.getElementById('fromDate').value;
+  const toVal = document.getElementById('toDate').value;
+
+  // basic validation
+  if(isNaN(P) || P<=0){ alert('Enter valid principal'); return; }
+  if(isNaN(R) || R<0){ alert('Enter valid rate'); return; }
+
+  // days override
+  if(!isNaN(days) && days>0){ months = days / 30; }
+
+  // compute months from dates if needed
+  if(isNaN(months) || months<=0){
+    if(!fromVal || !toVal){ alert('Enter months/days OR both From & To dates'); return; }
+    const s = new Date(fromVal); const e = new Date(toVal);
+    if(isNaN(s.getTime()) || isNaN(e.getTime()) || e < s){ alert('Invalid dates'); return; }
+    months = bankerMonthsBetween(s,e);
+  }
+
+  // now calculate interest
+  let interest, total;
+  if(interestType === 'simple'){
+    interest = P * (R / 100) * months;
+    total = P + interest;
+  } else {
+    const n = parseInt(document.getElementById('freq').value, 10) || 12;
+    const tYears = months / 12;
+    const annualRate = (R / 100) * 12; // convert monthly percent to annual nominal
+    total = P * Math.pow(1 + annualRate / n, n * tYears);
+    interest = total - P;
+  }
+
+  // display results
+  const totalDays = Math.floor(months * 30);
+  const years = Math.floor(totalDays / 360);
+  const rem = totalDays % 360;
+  const monthsPart = Math.floor(rem / 30);
+  const daysPart = rem % 30;
+
+  document.getElementById('interestOut').textContent = `Interest: ₹${Number(interest.toFixed(2)).toLocaleString('en-IN')}`;
+  document.getElementById('totalOut').textContent = `Total: ₹${Number(total.toFixed(2)).toLocaleString('en-IN')}`;
+  document.getElementById('periodOut').textContent = `Period: ${years}y ${monthsPart}m ${daysPart}d (${totalDays} days)`;
+  document.getElementById('resultBox').style.display = 'block'; // show result
+});
+clearBtn.addEventListener('click', ()=>{
+  principalEl.value='';
+  document.getElementById('rate').value='';
+  document.getElementById('fromDate').value='';
+  document.getElementById('toDate').value='';
+  document.getElementById('monthsInput').value='';
+  document.getElementById('daysInput').value='';
+  document.getElementById('resultBox').style.display='none';
+});
+
+</script>
+</body>
+</html>
